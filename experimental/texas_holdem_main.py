@@ -1,4 +1,4 @@
-import texas_holdem
+import experimental.texas_holdem as texas_holdem
 
 # -*- coding: utf-8 -*-
 # import sys
