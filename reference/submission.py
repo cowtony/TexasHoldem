@@ -1,6 +1,6 @@
-import mdp, math, random
+import reference.mdp as mdp, math, random
 from collections import defaultdict
-from mdp_algorithm import ValueIteration
+from reference.mdp_algorithm import ValueIteration
 from typing import List, Callable, Tuple, Any
 
 ############################################################

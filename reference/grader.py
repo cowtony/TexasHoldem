@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
-import random, mdp, collections
-import graderUtil
+import random, reference.mdp as mdp, collections
+import reference.graderUtil as graderUtil
 
 grader = graderUtil.Grader()
 submission = grader.load('submission')
