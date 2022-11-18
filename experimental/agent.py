@@ -69,13 +69,4 @@ class LearningAgent(Agent):
   def GetActions(self, state: State):
     return [Action.FOLD, Action.CALL, Action.RAISE]
 
-
-  def getAction(self, state: State) -> Action:
-    if state.IsEnd():
-      return None
-
-    value, action = self.Value(state)
-
-    
-    return action
       
