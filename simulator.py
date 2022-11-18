@@ -1,23 +1,24 @@
-from typing import List
-from rl_algorithm import *
-from state import Action, State, getActions
 import random
+from typing import List, Tuple
+from algorithm import RLAlgorithm, StochasticAgent, FoldOnlyAgent, CallOnlyAgent, RaiseOnlyAgent, HumanAgent, QLearningAgent
+from state import Action, State, getActions
 
 
 class TexasHoldemSimulator:
-    def __init__(self, agent_list):
+    def __init__(self, agent_list: List[RLAlgorithm]):
         self.agents = agent_list
+        self.chips = [0] * len(self.agents)
         self.dealer_id = 0   # Indicate who should talk first. small_blind = dealer + 1, big_blind = dealer + 2
 
         # Standard Deck
         self.kSuitColor = ['\u001b[37;1m', '\u001b[31m', '\u001b[32;1m', '\u001b[34;1m']
         self.kSuits = ['♤', '♡', '♧', '♢']
-        self.kRanks = ['A', '2', '3', '4', '5', '6', '7', '8', '9', 'T', 'J', 'Q', 'K']
+        self.kRanks = ['2', '3', '4', '5', '6', '7', '8', '9', 'T', 'J', 'Q', 'K', 'A']
 
         # Leduc Deck (COmment out to use the standard deck)
         # self.kSuitColor = ['\u001b[37;1m']
         # self.kSuits = ['♤']
-        # self.kRanks = ['A', 'T', 'J', 'Q', 'K']
+        # self.kRanks = ['T', 'J', 'Q', 'K', 'A']
 
 
     # Util function to print a card nicely.
@@ -36,15 +37,36 @@ class TexasHoldemSimulator:
         print(' '.join([f'{player}:{action.name}' for player, action in state.preflop_actions]))
 
 
-    def checkWinner(self, states: List[State]):
-        print('CheckWinner')
+    # TODO: Implement a complete version for Texas Hold'em.
+    def winningHand(self, hands: List[Tuple[int, int]]):
+        rank = []
+        for card_1, card_2 in hands:
+            num_1 = card_1 % len(self.kRanks) + 1  # +1 to avoid 0 value.
+            num_2 = card_2 % len(self.kRanks) + 1
+            if num_1 == num_2:  # Pair
+                rank.append(num_1 * len(self.kRanks) ** 2)
+            elif num_1 > num_2:
+                rank.append(num_1 * len(self.kRanks) + num_2)
+            else:  # num_1 < num_2
+                rank.append(num_2 * len(self.kRanks) + num_1)
+
+        max_rank = max(rank)
+        return [idx for idx, value in enumerate(rank) if value == max_rank]
 
 
-    def showdown(self, states):
-        print('ShowDown')
+    # Return the winner ID, it could be multiple winners split the pot.
+    def showdown(self, states: List[State], active_player: List[bool]) -> List[int]:
+        active_id = []
+        active_hand = []
+        for state, active in zip(states, active_player):
+            if active:
+                active_id.append(state.my_id)
+                active_hand.append(state.my_hand)
+
+        return [active_id[winner] for winner in self.winningHand(active_hand)]
 
 
-    def play_one_hand(self):
+    def play_one_hand(self) -> None:
         # Prepare the deck and shuffle it.
         deck = list(range(len(self.kSuits) * len(self.kRanks)))
         random.shuffle(deck)
@@ -58,72 +80,102 @@ class TexasHoldemSimulator:
         # NOTE: The order of dealing the card is not as real game. It shouldn't matter because the deck is shuffled.
         states = []
         for id, agent in enumerate(self.agents):
-            states.append(State(total_players, [deck.pop(), deck.pop()], id, id, []))
+            states.append(State(total_players, (deck.pop(), deck.pop()), id, id, []))
             print(f'Player_{id}:', self.printCards(states[-1].my_hand))
+
+        # Store the previous state / action / reward for updating incorporateFeedback().
         last_state = [None] * total_players
         last_action = [None] * total_players
+        last_reward = [0] * total_players
 
         small_blind_id = (self.dealer_id + 1) % total_players
         big_blind_id = (self.dealer_id + 2) % total_players
-        current_id = (self.dealer_id + 3) % total_players
-        stop_id = (self.dealer_id + 3) % total_players
+        stop_id = id = (self.dealer_id + 3) % total_players
 
         # Small blind and Big blind putting their chips.
         for state in states:
             state.preflop_actions.append((small_blind_id, Action.RAISE))  # Raise from 0 to 1
+        print(f'Pot: {1}\t', end='')
+        self.printState(states[small_blind_id])
+        self.chips[small_blind_id] += -1
+        # self.agents[small_blind_id].incorporateFeedback(last_state[id], Action.RAISE, -1, states[small_blind_id])  # TODO: this is incorrect yet, fix it.
+
+        for state in states:
             state.preflop_actions.append((big_blind_id, Action.RAISE))  # Raise from 1 to 2
-            self.printState(state)
+        print(f'Pot: {3}\t', end='')
+        self.chips[small_blind_id] += -2
+        self.printState(states[big_blind_id])
 
         # Pre-flop
-        while True:
-            if active_player[current_id] == True:
-                self.agents[current_id].incorporateFeedback('self', last_state[current_id], last_action[current_id], 0, states[current_id])
-                last_action[current_id] = self.agents[current_id].getAction('self', states[current_id])  # TODO: Why I have to add a self arg here???????????????????????????????
-                last_state[current_id] = states[current_id]
+        while active_player_count > 1:
+            if active_player[id] == True:
+                if last_action[id] != None:  # Avoid the first call
+                    self.agents[id].incorporateFeedback(last_state[id], last_action[id], last_reward[id], states[id])
+                    self.chips[id] += last_reward[id]
+                last_action[id] = self.agents[id].getAction(states[id])
+                last_state[id] = states[id]
+                call_cost, raise_cost, pot_size = states[id].getCost()
                 
                 # Update this action to each player's state
                 for state in states:
-                    state.preflop_actions.append((current_id, last_action[current_id]))
-                    self.printState(state)
+                    state.preflop_actions.append((id, last_action[id]))
 
-                if last_action[current_id] == Action.FOLD:
-                    active_player[current_id] = False
+                if last_action[id] == Action.FOLD:
+                    active_player[id] = False
                     active_player_count -= 1
-                    if active_player_count == 1:
-                        self.checkWinner(states)
-                        break
-                elif last_action[current_id] == Action.RAISE:
-                    stop_id = current_id  # The raise will refresh stop_id of the last player who eligible to talk.
+                elif last_action[id] == Action.RAISE:
+                    stop_id = id  # The raise will refresh stop_id of the last player who eligible to talk.
+                    last_reward[id] = -raise_cost
+                    pot_size += raise_cost
                 else:  # Action.CALL
-                    amount = states[current_id].getCallAmount()
-                    pass
+                    last_reward[id] = -call_cost
+                    pot_size += call_cost
 
-            current_id = (current_id + 1) % total_players
-            if current_id == stop_id:
+                print(f'Pot: {pot_size}\t', end='') 
+                self.printState(states[id])
+
+            id = (id + 1) % total_players
+            if id == stop_id:
                 break  # Preflp talk completed with no one raise in previous round.
-
-
 
         # TODO: Flop
         # TODO: Turn
         # TODO: River
 
-        # TODO: Calculate winner
-        self.showdown(states)
+        # Calculate winner
+        winners = self.showdown(states, active_player)
+        print(f'The winners are player {winners}')
+        # One more update for the final reward
+        for id in range(total_players):
+            reward = pot_size / len(winners) if id in winners else 0
+            self.agents[id].incorporateFeedback(last_state[id], last_action[id], last_reward[id] + reward, None)
+            self.chips[id] += last_reward[id] + reward
+
+        print(f"Players' chips: {self.chips}")
+
+        # Shift dealer position for next hand.
+        self.dealer_id = (self.dealer_id + 1) % total_players
+
+
+    def play_n_hands(self, n: int):
+        for i in range(n):
+            self.play_one_hand()
 
 
 
 # Return a single-element list containing a binary (indicator) feature
 # for the existence of the (state, action) pair.  Provides no generalization.
-def identityFeatureExtractor(state: State, action: Action) -> List[Tuple[Tuple, int]]:
+def identityFeatureExtractor(state: State, action: Action) -> List[Tuple[State, Action]]:
     featureKey = (state, action)
     featureValue = 1
     return [(featureKey, featureValue)]
 
+
 def main():
     learning_agent = QLearningAgent(getActions, 1.0, identityFeatureExtractor)
-    simulator = TexasHoldemSimulator([StochasticAgent, StochasticAgent])
-    simulator.play_one_hand()
+    call_agent = CallOnlyAgent()
+    simulator = TexasHoldemSimulator([learning_agent, call_agent])
+    simulator.play_n_hands(1000)
 
 
 if __name__ == "__main__":

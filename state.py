@@ -9,7 +9,7 @@ class Action(Enum):
 
 
 class State:
-    def __init__(self, total_players: int, hand: list, id: int, player_id: int, actions: list):
+    def __init__(self, total_players: int, hand: Tuple[int, int], id: int, player_id: int, actions: list):
         self.players = total_players
         self.my_hand = hand
         self.my_id = id
@@ -17,9 +17,9 @@ class State:
         self.preflop_actions = actions
 
 
-    # Return the cost for action CALL or RAISE.
+    # Return the cost for action CALL or RAISE as well as the current pot size.
     # The cost will be the chip amount needed for this action.
-    def getCost(self) -> Tuple[int, int]:
+    def getCost(self) -> Tuple[int, int, int]:
         player_bet = [0] * self.players
         current_bet = 0
         pot = 0
@@ -43,23 +43,13 @@ class State:
                 player_bet[id] = current_bet
         
         call_amount = current_bet - player_bet[self.my_id]
-        return call_amount, call_amount + pot // 2
+        return call_amount, call_amount + pot // 2, pot
 
 
     def IsEnd(self):
-        raise("Not implemented")
+        raise("Unimplemented")
 
 
-    def Utility(self):
-        raise("Not implemented")
-
-
-    def Successor(self, action: Action):
-        return State(self.players, 
-                     self.my_hand, 
-                     self.my_id,
-                    (self.current_player + 1) % self.players, 
-                     self.preflop_actions + [(self.current_player, action)])
 
 
 def getActions(state: State) -> List[Action]:

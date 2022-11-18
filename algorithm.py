@@ -1,8 +1,9 @@
-from collections import defaultdict
-from typing import List, Tuple, Dict, Any, Callable
-from state import State, Action
 import random
 import math
+from collections import defaultdict
+from typing import List, Tuple, Dict, Any, Callable
+
+from state import State, Action
 
 
 # Abstract class: an RLAlgorithm performs reinforcement learning.  All it needs
@@ -89,7 +90,7 @@ class QLearningAgent(RLAlgorithm):
         if random.random() < self.explorationProb:
             return random.choice(self.actions(state))
         else:
-            return max((self.getQ(state, action), action) for action in self.actions(state))[1]
+            return max([(self.getQ(state, action), action) for action in self.actions(state)], key=lambda tup: tup[0])[1]
 
 
     # Call this function to get the step size to update the weights.
@@ -101,8 +102,7 @@ class QLearningAgent(RLAlgorithm):
     # Note that if s is a terminal state, then s' will be None.  Remember to check for this.
     # You should update the weights using self.getStepSize(); use
     # self.getQ() to compute the current estimate of the parameters.
-    def incorporateFeedback(self, state: Tuple, action: Any, reward: int, newState: Tuple) -> None:
-        # BEGIN_YOUR_CODE (our solution is 9 lines of code, but don't worry if you deviate from this)
+    def incorporateFeedback(self, state: State, action: Action, reward: int, newState: State) -> None:
         eta = self.getStepSize()
         q_opt = self.getQ(state, action)
         v_opt = 0 if newState is None \
@@ -111,28 +111,4 @@ class QLearningAgent(RLAlgorithm):
 
         for feature, value in self.featureExtractor(state, action):
             self.weights[feature] -= coefficient * value
-        # END_YOUR_CODE
 
-
-    # def Value(self, state: State) -> Tuple[float, Action]:
-    #     if state.IsEnd():
-    #         return state.Utility(), None
-
-    #     if state.current_player == self.player_id:
-    #         max_value, best_action = float('-inf'), None
-    #         for action in self.GetActions(state):
-    #             value, _ = self.Value(state.Successor(action))
-    #     if value > max_value:
-    #       max_value, best_action = value, action
-    #         return max_value, best_action
-
-    #         else:
-    #         sum_value = 0
-    #         for action in self.GetActions(state):
-    #             value, _ = self.Value(state.Successor(action))
-    #             sum_value += value * (1/action)  # TODO: learn PI(state, action)
-    #         return sum_value, None
-
-
-    #         def GetActions(self, state: State):
-    #             return [Action.FOLD, Action.CALL, Action.RAISE]      
