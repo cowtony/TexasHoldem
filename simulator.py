@@ -1,7 +1,7 @@
 import random
 from typing import List, Tuple
 from algorithm import RLAlgorithm, StochasticAgent, FoldOnlyAgent, CallOnlyAgent, RaiseOnlyAgent, HumanAgent, QLearningAgent
-from state import Action, State, getActions
+from game_state import Action, State, getActions
 
 
 class TexasHoldemSimulator:
@@ -16,9 +16,9 @@ class TexasHoldemSimulator:
         self.kRanks = ['2', '3', '4', '5', '6', '7', '8', '9', 'T', 'J', 'Q', 'K', 'A']
 
         # Leduc Deck (COmment out to use the standard deck)
-        # self.kSuitColor = ['\u001b[37;1m']
-        # self.kSuits = ['♤']
-        # self.kRanks = ['T', 'J', 'Q', 'K', 'A']
+        self.kSuitColor = ['\u001b[37;1m']
+        self.kSuits = ['♤']
+        self.kRanks = ['Q', 'K', 'A']
 
 
     # Util function to print a card nicely.
@@ -33,8 +33,9 @@ class TexasHoldemSimulator:
 
     # Util function to print one state.
     def printState(self, state: State):
-        print(f'State of Player {state.my_id}: ' + self.printCards(state.my_hand) + ' Actions: ', end='')
-        print(' '.join([f'{player}:{action.name}' for player, action in state.preflop_actions]))
+        player_color = f'\u001b[{31+state.my_id};1m'
+        print(player_color + f'State of Player {state.my_id}: ' + self.printCards(state.my_hand) + ' Actions: ', end='')
+        print(player_color + ' '.join([f'{player}:{action.name}' for player, action in state.preflop_actions]) + '\u001b[0m')
 
 
     # TODO: Implement a complete version for Texas Hold'em.
@@ -80,7 +81,10 @@ class TexasHoldemSimulator:
         # NOTE: The order of dealing the card is not as real game. It shouldn't matter because the deck is shuffled.
         states = []
         for id, agent in enumerate(self.agents):
-            states.append(State(total_players, (deck.pop(), deck.pop()), id, id, []))
+            # NOTE: One simplfy is limited to only AA, KK, QQ
+            card = deck.pop()
+            states.append(State(total_players, (card, card), id, id, ()))
+            # states.append(State(total_players, (deck.pop(), deck.pop()), id, id, ()))
             print(f'Player_{id}:', self.printCards(states[-1].my_hand))
 
         # Store the previous state / action / reward for updating incorporateFeedback().
@@ -94,14 +98,14 @@ class TexasHoldemSimulator:
 
         # Small blind and Big blind putting their chips.
         for state in states:
-            state.preflop_actions.append((small_blind_id, Action.RAISE))  # Raise from 0 to 1
+            state.preflop_actions = state.preflop_actions + ((small_blind_id, Action.RAISE),)  # Raise from 0 to 1
         print(f'Pot: {1}\t', end='')
         self.printState(states[small_blind_id])
         self.chips[small_blind_id] += -1
         # self.agents[small_blind_id].incorporateFeedback(last_state[id], Action.RAISE, -1, states[small_blind_id])  # TODO: this is incorrect yet, fix it.
 
         for state in states:
-            state.preflop_actions.append((big_blind_id, Action.RAISE))  # Raise from 1 to 2
+            state.preflop_actions = state.preflop_actions + ((big_blind_id, Action.RAISE),)  # Raise from 1 to 2
         print(f'Pot: {3}\t', end='')
         self.chips[small_blind_id] += -2
         self.printState(states[big_blind_id])
@@ -118,7 +122,7 @@ class TexasHoldemSimulator:
                 
                 # Update this action to each player's state
                 for state in states:
-                    state.preflop_actions.append((id, last_action[id]))
+                    state.preflop_actions = state.preflop_actions + ((id, last_action[id]),)
 
                 if last_action[id] == Action.FOLD:
                     active_player[id] = False
@@ -166,7 +170,7 @@ class TexasHoldemSimulator:
 # Return a single-element list containing a binary (indicator) feature
 # for the existence of the (state, action) pair.  Provides no generalization.
 def identityFeatureExtractor(state: State, action: Action) -> List[Tuple[State, Action]]:
-    featureKey = (state, action)
+    featureKey = (state.getTuple(), action)
     featureValue = 1
     return [(featureKey, featureValue)]
 
@@ -176,6 +180,10 @@ def main():
     call_agent = CallOnlyAgent()
     simulator = TexasHoldemSimulator([learning_agent, call_agent])
     simulator.play_n_hands(1000)
+
+    for (state, action), value in learning_agent.weights.items():
+        print(f'{state} {action} {value}')
+    print(len(learning_agent.weights))
 
 
 if __name__ == "__main__":

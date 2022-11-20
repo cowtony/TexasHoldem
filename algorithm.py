@@ -3,7 +3,7 @@ import math
 from collections import defaultdict
 from typing import List, Tuple, Dict, Any, Callable
 
-from state import State, Action
+from game_state import State, Action
 
 
 # Abstract class: an RLAlgorithm performs reinforcement learning.  All it needs
@@ -90,6 +90,15 @@ class QLearningAgent(RLAlgorithm):
         if random.random() < self.explorationProb:
             return random.choice(self.actions(state))
         else:
+            best_action = None
+            max_q = float('-inf')
+            for action in self.actions(state):
+                q = self.getQ(state, action)
+                print(f'{state} {action} {q}')
+                if q > max_q:
+                    best_action, max_q = action, q
+            print(f'Final action: {best_action}')
+            return best_action
             return max([(self.getQ(state, action), action) for action in self.actions(state)], key=lambda tup: tup[0])[1]
 
 
