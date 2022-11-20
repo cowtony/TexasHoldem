@@ -21,7 +21,7 @@ class RLAlgorithm:
     # 0, None). When this function is called, it indicates that taking action
     # |action| in state |state| resulted in reward |reward| and a transition to state
     # |newState|.
-    def incorporateFeedback(self, state: State, action: Action, reward: int, newState: State): pass
+    def incorporateFeedback(self, state: State, action: Action, reward: float, newState: State): pass
 
 
 class StochasticAgent(RLAlgorithm):
@@ -71,7 +71,7 @@ class QLearningAgent(RLAlgorithm):
         self.featureExtractor = featureExtractor
         self.explorationProb = explorationProb
         self.weights = defaultdict(float)
-        self.numIters = 0
+        self.numIters = 1  # Starting from 1 to avoid divided by zero in `getStepSize()`
 
 
     # Return the Q function associated with the weights and features
@@ -90,15 +90,6 @@ class QLearningAgent(RLAlgorithm):
         if random.random() < self.explorationProb:
             return random.choice(self.actions(state))
         else:
-            best_action = None
-            max_q = float('-inf')
-            for action in self.actions(state):
-                q = self.getQ(state, action)
-                print(f'{state} {action} {q}')
-                if q > max_q:
-                    best_action, max_q = action, q
-            print(f'Final action: {best_action}')
-            return best_action
             return max([(self.getQ(state, action), action) for action in self.actions(state)], key=lambda tup: tup[0])[1]
 
 
@@ -111,7 +102,7 @@ class QLearningAgent(RLAlgorithm):
     # Note that if s is a terminal state, then s' will be None.  Remember to check for this.
     # You should update the weights using self.getStepSize(); use
     # self.getQ() to compute the current estimate of the parameters.
-    def incorporateFeedback(self, state: State, action: Action, reward: int, newState: State) -> None:
+    def incorporateFeedback(self, state: State, action: Action, reward: float, newState: State) -> None:
         eta = self.getStepSize()
         q_opt = self.getQ(state, action)
         v_opt = 0 if newState is None \

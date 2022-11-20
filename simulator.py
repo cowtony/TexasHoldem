@@ -1,5 +1,6 @@
+from copy import copy, deepcopy
 import random
-from typing import List, Tuple
+from typing import List, Tuple, Any
 from algorithm import RLAlgorithm, StochasticAgent, FoldOnlyAgent, CallOnlyAgent, RaiseOnlyAgent, HumanAgent, QLearningAgent
 from game_state import Action, State, getActions
 
@@ -7,7 +8,7 @@ from game_state import Action, State, getActions
 class TexasHoldemSimulator:
     def __init__(self, agent_list: List[RLAlgorithm]):
         self.agents = agent_list
-        self.chips = [0] * len(self.agents)
+        self.chips = [0.0] * len(self.agents)
         self.dealer_id = 0   # Indicate who should talk first. small_blind = dealer + 1, big_blind = dealer + 2
 
         # Standard Deck
@@ -34,7 +35,7 @@ class TexasHoldemSimulator:
     # Util function to print one state.
     def printState(self, state: State):
         player_color = f'\u001b[{31+state.my_id};1m'
-        print(player_color + f'State of Player {state.my_id}: ' + self.printCards(state.my_hand) + ' Actions: ', end='')
+        print(player_color + f'State of Player {state.my_id}: ' + self.printCards(list(state.my_hand)) + ' Actions: ', end='')
         print(player_color + ' '.join([f'{player}:{action.name}' for player, action in state.preflop_actions]) + '\u001b[0m')
 
 
@@ -88,9 +89,7 @@ class TexasHoldemSimulator:
             print(f'Player_{id}:', self.printCards(states[-1].my_hand))
 
         # Store the previous state / action / reward for updating incorporateFeedback().
-        last_state = [None] * total_players
-        last_action = [None] * total_players
-        last_reward = [0] * total_players
+        privious = [(state, None, 0.0) for state in states]
 
         small_blind_id = (self.dealer_id + 1) % total_players
         big_blind_id = (self.dealer_id + 2) % total_players
@@ -102,39 +101,45 @@ class TexasHoldemSimulator:
         print(f'Pot: {1}\t', end='')
         self.printState(states[small_blind_id])
         self.chips[small_blind_id] += -1
-        # self.agents[small_blind_id].incorporateFeedback(last_state[id], Action.RAISE, -1, states[small_blind_id])  # TODO: this is incorrect yet, fix it.
-
+        
         for state in states:
             state.preflop_actions = state.preflop_actions + ((big_blind_id, Action.RAISE),)  # Raise from 1 to 2
         print(f'Pot: {3}\t', end='')
         self.chips[small_blind_id] += -2
         self.printState(states[big_blind_id])
 
+        # TODO: should we incorporateFeedBack for the force small blind and big blind?
+        # self.agents[small_blind_id].incorporateFeedback(last_state[small_blind_id], Action.RAISE, -1, states[small_blind_id])
+        # self.agents[ big_blind_id ].incorporateFeedback(last_state[ big_blind_id ], Action.RAISE, -2, states[ big_blind_id ])
+
         # Pre-flop
         while active_player_count > 1:
             if active_player[id] == True:
-                if last_action[id] != None:  # Avoid the first call
-                    self.agents[id].incorporateFeedback(last_state[id], last_action[id], last_reward[id], states[id])
-                    self.chips[id] += last_reward[id]
-                last_action[id] = self.agents[id].getAction(states[id])
-                last_state[id] = states[id]
+                if privious[id][1] != None:  # Avoid the first call by checking Action
+                    self.agents[id].incorporateFeedback(privious[id][0], privious[id][1], privious[id][2], states[id])
+                    
+                action = self.agents[id].getAction(states[id])
                 call_cost, raise_cost, pot_size = states[id].getCost()
-                
-                # Update this action to each player's state
-                for state in states:
-                    state.preflop_actions = state.preflop_actions + ((id, last_action[id]),)
 
-                if last_action[id] == Action.FOLD:
+                if action == Action.FOLD:
                     active_player[id] = False
                     active_player_count -= 1
-                elif last_action[id] == Action.RAISE:
+                    privious[id] = (deepcopy(states[id]), action, 0)
+                elif action == Action.RAISE:
                     stop_id = id  # The raise will refresh stop_id of the last player who eligible to talk.
-                    last_reward[id] = -raise_cost
+                    self.chips[id] -= raise_cost
+                    privious[id] = (deepcopy(states[id]), action, -raise_cost)
                     pot_size += raise_cost
                 else:  # Action.CALL
-                    last_reward[id] = -call_cost
+                    self.chips[id] -= call_cost
+                    privious[id] = (deepcopy(states[id]), action, -call_cost)
                     pot_size += call_cost
 
+                # Update this action to each player's state
+                for state in states:
+                    state.preflop_actions = state.preflop_actions + ((id, action),)
+
+                # Print Info
                 print(f'Pot: {pot_size}\t', end='') 
                 self.printState(states[id])
 
@@ -152,8 +157,9 @@ class TexasHoldemSimulator:
         # One more update for the final reward
         for id in range(total_players):
             reward = pot_size / len(winners) if id in winners else 0
-            self.agents[id].incorporateFeedback(last_state[id], last_action[id], last_reward[id] + reward, None)
-            self.chips[id] += last_reward[id] + reward
+            print(privious[id][0], privious[id][1], privious[id][2] + reward)
+            self.agents[id].incorporateFeedback(privious[id][0], privious[id][1], privious[id][2] + reward, None)
+            self.chips[id] += reward
 
         print(f"Players' chips: {self.chips}")
 
@@ -169,7 +175,7 @@ class TexasHoldemSimulator:
 
 # Return a single-element list containing a binary (indicator) feature
 # for the existence of the (state, action) pair.  Provides no generalization.
-def identityFeatureExtractor(state: State, action: Action) -> List[Tuple[State, Action]]:
+def identityFeatureExtractor(state: State, action: Action) -> List[Tuple[Tuple[Any, Action], float]]:
     featureKey = (state.getTuple(), action)
     featureValue = 1
     return [(featureKey, featureValue)]
@@ -178,8 +184,9 @@ def identityFeatureExtractor(state: State, action: Action) -> List[Tuple[State, 
 def main():
     learning_agent = QLearningAgent(getActions, 1.0, identityFeatureExtractor)
     call_agent = CallOnlyAgent()
-    simulator = TexasHoldemSimulator([learning_agent, call_agent])
-    simulator.play_n_hands(1000)
+    stochastic_agent = StochasticAgent()
+    simulator = TexasHoldemSimulator([learning_agent, stochastic_agent])
+    simulator.play_n_hands(10000)
 
     for (state, action), value in learning_agent.weights.items():
         print(f'{state} {action} {value}')

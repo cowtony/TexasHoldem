@@ -3,9 +3,11 @@ from typing import List, Tuple
 
 @unique
 class Action(Enum):
+    # UNDEFINED = 0
     FOLD = 1
     CALL = 2   # Equivalent to `check`
     RAISE = 3  # Equivalent to `bet`
+
 
 class State:
     def __init__(self, total_players: int, hand: tuple, id: int, player_id: int, actions: tuple):
@@ -18,7 +20,7 @@ class State:
     def __str__(self):
         # TODO: implement this.
         color = f'\u001b[{31+self.my_id};1m'
-        return f'Player {self.my_id}: {self.my_hand} Actions: ' + ' '.join([f'{player}:{action.name}' for player, action in self.preflop_actions]) + '\u001b[0m'
+        return f'{self.players} Player {self.my_id}: {self.my_hand} Actions: ' + ' '.join([f'{player}:{action.name}' for player, action in self.preflop_actions]) + '\u001b[0m'
 
     # For hash purpose, using this combining the Action could provide a correct hashable tuple.
     def getTuple(self):
