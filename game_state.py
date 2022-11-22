@@ -1,5 +1,6 @@
 from enum import Enum, unique
 from typing import List, Tuple
+from poker_deck import PokerDeck
 
 @unique
 class Action(Enum):
@@ -10,7 +11,7 @@ class Action(Enum):
 
 
 class State:
-    def __init__(self, total_players: int, hand: tuple, id: int, player_id: int, actions: tuple):
+    def __init__(self, total_players: int, hand: Tuple[int, int], id: int, player_id: int, actions: tuple):
         self.players = total_players
         self.my_hand = hand
         self.my_id = id
@@ -21,6 +22,13 @@ class State:
         # TODO: implement this.
         color = f'\u001b[{31+self.my_id};1m'
         return f'{self.players} Player {self.my_id}: {self.my_hand} Actions: ' + ' '.join([f'{player}:{action.name}' for player, action in self.preflop_actions]) + '\u001b[0m'
+
+    
+    def print(self, deck: PokerDeck):
+        player_color = f'\u001b[{31+self.my_id};1m'
+        print(player_color + f'State of Player {self.my_id}: ' + deck.printCards(list(self.my_hand)) + ' Actions: ', end='')
+        print(player_color + ' '.join([f'{player}:{action.name}' for player, action in self.preflop_actions]) + '\u001b[0m')
+
 
     # For hash purpose, using this combining the Action could provide a correct hashable tuple.
     def getTuple(self):

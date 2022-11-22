@@ -11,7 +11,7 @@ from game_state import State, Action
 # simulate()) will call getAction() to get an action, perform the action, and
 # then provide feedback (via incorporateFeedback()) to the RL algorithm, so it can adjust
 # its parameters.
-class RLAlgorithm:
+class LearningAgent:
     # Your algorithm will be asked to produce an action given a state.
     def getAction(self, state: State) -> Action: raise NotImplementedError("Override me")
 
@@ -24,27 +24,30 @@ class RLAlgorithm:
     def incorporateFeedback(self, state: State, action: Action, reward: float, newState: State): pass
 
 
-class StochasticAgent(RLAlgorithm):
+class StochasticAgent(LearningAgent):
     def getAction(self, state: State) -> Action:
       return random.choice([action for action in Action])
 
 
-class FoldOnlyAgent(RLAlgorithm):
-    def getAction(self, state: State) -> Action:
-        return Action.FOLD
-
-
-class CallOnlyAgent(RLAlgorithm):
+class CallOnlyAgent(LearningAgent):
     def getAction(self, state: State) -> Action:
         return Action.CALL
 
 
-class RaiseOnlyAgent(RLAlgorithm):
+# This agent is only used for the A, K, Q game.
+class AKQAgent(LearningAgent):
     def getAction(self, state: State) -> Action:
-        return Action.RAISE
+        if state.my_hand == (2, 2):  # AA
+            return Action.RAISE
+        elif state.my_hand == (1, 1):  # KK
+            return random.choice([action for action in Action])
+        elif state.my_hand == (0, 0):  # QQ
+            return Action.FOLD
+        else:
+            raise("This agent is only used for AKQ simplified game!")  # type: ignore
 
 
-class HumanAgent(RLAlgorithm):
+class HumanAgent(LearningAgent):
     def getAction(self, state: State) -> Action:
         while True:
             action = input(f"Player_{state.my_id}, What's your action (1:FOLD 2:CALL/CHECK 3:RAISE)? ")
@@ -64,7 +67,7 @@ class HumanAgent(RLAlgorithm):
 # featureExtractor: a function that takes a state and action and returns a list of (feature name, feature value) pairs.
 # explorationProb: the epsilon value indicating how frequently the policy
 # returns a random action
-class QLearningAgent(RLAlgorithm):
+class QLearningAgent(LearningAgent):
     def __init__(self, actions: Callable, discount: float, featureExtractor: Callable, explorationProb=0.2):
         self.actions = actions
         self.discount = discount
