@@ -1,9 +1,10 @@
 from copy import copy, deepcopy
 from typing import List, Tuple, Any
+import queue
 import matplotlib.pyplot as plt
 
-from learning_agent import LearningAgent, StochasticAgent, SingleActionAgent, HumanAgent, AKQAgent, QLearningAgent
-from game_state import Action, State, getActions
+from learning_agent import *
+from game_state import *
 from poker_deck import PokerDeck
 
 
@@ -16,7 +17,7 @@ class TexasHoldemSimulator:
 
 
     # TODO: Implement a complete version for Texas Hold'em.
-    def winningHand(self, hands: List[Tuple[int, int]], deck: PokerDeck):
+    def winningHand(self, hands: List[Tuple[int, int]], public_cards: tuple, deck: PokerDeck):
         rank = []
         for card_1, card_2 in hands:
             num_1 = card_1 % len(deck.kRanks) + 1  # +1 to avoid 0 value.
@@ -32,132 +33,140 @@ class TexasHoldemSimulator:
         return [idx for idx, value in enumerate(rank) if value == max_rank]
 
 
-    # Return the winner ID, it could be multiple winners split the pot.
-    def showdown(self, states: List[State], active_player: List[bool], deck: PokerDeck) -> List[int]:
+    # Return the winner IDs, it could be multiple winners split the pot.
+    def showdown(self, exclusive_states: List[ExclusiveState], public_state: PublicState, active_players: List[int], deck: PokerDeck) -> List[int]:
         active_id = []
         active_hand = []
-        for state, active in zip(states, active_player):
-            if active:
-                active_id.append(state.my_id)
-                active_hand.append(state.my_hand)
+        for id in active_players:
+            active_id.append(exclusive_states[id].my_id)
+            active_hand.append(exclusive_states[id].my_hand)
 
-        return [active_id[winner] for winner in self.winningHand(active_hand, deck)]
+        return [active_id[winner] for winner in self.winningHand(active_hand, public_state.cards, deck)]
 
 
-    def play_one_hand(self) -> None:
-        # Prepare the deck and shuffle it.
-        deck = PokerDeck()
+    # A transaction deduct chips from player and add to the pot.
+    # NOTE: The positive amount is flow into the pot.
+    def updateChips(self, public_state, exclusive_states, player_id, amount):
+        public_state.pot += amount
+        exclusive_states[player_id].chips -= amount
+        self.chips[player_id] -= amount
 
-        # Initilize players
-        total_players = len(self.agents)
-        active_player = [True] * total_players
-        active_player_count = total_players
 
-        # Deal the card to players. Initlize the start state for each agent.
-        # NOTE: The order of dealing the card is not as real game. It shouldn't matter because the deck is shuffled.
-        states = []
-        for id, agent in enumerate(self.agents):
-            # NOTE: One simplfy is limited to only AA, KK, QQ
-            card = deck.dealCard()
-            states.append(State(total_players, (card, card), id, id, ()))
-            # states.append(State(total_players, (deck.pop(), deck.pop()), id, id, ()))
-            if self.verbose == 2:
-                print(f'Player_{id}:', deck.printCards(states[-1].my_hand))
-
-        # Store the previous state / action / reward for updating incorporateFeedback().
-        privious = [(state, None, 0.0) for state in states]
-
-        small_blind_id = (self.dealer_id + 1) % total_players
-        big_blind_id = (self.dealer_id + 2) % total_players
-        stop_id = id = (self.dealer_id + 3) % total_players
-
+    def putBlinds(self, deck: PokerDeck, public_state: PublicState, exclusive_states: List[ExclusiveState]) -> None:
+        small_blind_id = (self.dealer_id + 1) % len(self.agents)
+        big_blind_id = (self.dealer_id + 2) % len(self.agents)
+        
         # Small blind and Big blind putting their chips.
-        pot = 0
-        for state in states:
-            state.preflop_actions = state.preflop_actions + ((small_blind_id, Action.RAISE),)  # Raise from 0 to 1
+        public_state.preflop_actions = public_state.preflop_actions + ((small_blind_id, Action.RAISE),)  # Raise from 0 to 1
+        self.updateChips(public_state, exclusive_states, small_blind_id, 1)
         if self.verbose == 2:
             print(f'Pot: {1}\t', end='')
-            states[small_blind_id].print(deck)
-        self.chips[small_blind_id] += -1
-        pot += 1
+            State(exclusive_states[small_blind_id], public_state).print(deck)
         
-        for state in states:
-            state.preflop_actions = state.preflop_actions + ((big_blind_id, Action.RAISE),)  # Raise from 1 to 2
+        public_state.preflop_actions = public_state.preflop_actions + ((big_blind_id, Action.RAISE),)  # Raise from 1 to 2
+        self.updateChips(public_state, exclusive_states, big_blind_id, 2)
         if self.verbose == 2:
             print(f'Pot: {3}\t', end='')
-            states[big_blind_id].print(deck)
-        self.chips[big_blind_id] += -2
-        pot += 2
+            State(exclusive_states[big_blind_id], public_state).print(deck)
 
-        # TODO: should we incorporateFeedBack for the force small blind and big blind?
-        # self.agents[small_blind_id].incorporateFeedback(last_state[small_blind_id], Action.RAISE, -1, states[small_blind_id])
-        # self.agents[ big_blind_id ].incorporateFeedback(last_state[ big_blind_id ], Action.RAISE, -2, states[ big_blind_id ])
 
-        # Pre-flop
-        while active_player_count > 1:
-            if active_player[id] == True:
-                if privious[id][1] != None:  # Avoid the first call by checking Action
-                    self.agents[id].incorporateFeedback(privious[id][0], privious[id][1], privious[id][2], states[id])
-                    
-                action = self.agents[id].getAction(states[id])
-                call_cost, raise_cost, pot_size = states[id].getCost()
-                if pot_size != pot:
-                    raise ("Some logical inside function State.getCost()")  # type: ignore
+    # TODO: remove `deck` argument from here.
+    def runPreFlop(self, deck: PokerDeck, public_state: PublicState, exclusive_states: List[ExclusiveState], active_players: queue.Queue):
+        # Initilize players
+        total_players = len(self.agents)
+        stop_id = id = (self.dealer_id + 3) % total_players
+        privious = [None] * total_players  # Store the previous state / action / reward for updating incorporateFeedback().
 
-                if action == Action.FOLD:
-                    active_player[id] = False
-                    active_player_count -= 1
-                    privious[id] = (deepcopy(states[id]), action, 0)
-                elif action == Action.RAISE:
-                    stop_id = id  # The raise will refresh stop_id of the last player who eligible to talk.
-                    self.chips[id] -= raise_cost
-                    pot += raise_cost
-                    privious[id] = (deepcopy(states[id]), action, -raise_cost)
-                else:  # Action.CALL
-                    self.chips[id] -= call_cost
-                    pot += call_cost
-                    privious[id] = (deepcopy(states[id]), action, -call_cost)
+        while active_players.qsize() > 1:
+            id = active_players.get()
 
-                # Update this action to each player's state
-                for state in states:
-                    state.preflop_actions = state.preflop_actions + ((id, action),)
+            if privious[id] != None:  # Avoid the first call by checking Action
+                self.agents[id].incorporateFeedback(privious[id][0], privious[id][1], privious[id][2], State(exclusive_states[id], public_state))
+                
+            action = self.agents[id].getAction(State(exclusive_states[id], public_state))
+            call_cost, raise_cost, pot_size = State(exclusive_states[id], public_state).getCostBySimulation()
+            if pot_size != public_state.pot:
+                raise ("Some logical inside function State.getCostBySimulation()")  # type: ignore
 
-                # Print Info
-                if self.verbose == 2:
-                    print(f'Pot: {pot_size}\t', end='') 
-                    states[id].print(deck)
+            if action == Action.FOLD:
+                privious[id] = (deepcopy(State(exclusive_states[id], public_state)), action, 0)
+            elif action == Action.RAISE:
+                stop_id = id  # The raise will refresh stop_id of the last player who eligible to talk.
+                privious[id] = (deepcopy(State(exclusive_states[id], public_state)), action, -raise_cost)
+                self.updateChips(public_state, exclusive_states, id, raise_cost)
+                active_players.put(id)
+            else:  # Action.CALL
+                privious[id] = (deepcopy(State(exclusive_states[id], public_state)), action, -call_cost)
+                self.updateChips(public_state, exclusive_states, id, call_cost)
+                active_players.put(id)
+
+            # Update public state.
+            public_state.preflop_actions = public_state.preflop_actions + ((id, action),)
+
+            # Print Info
+            if self.verbose == 2:
+                print(f'Pot: {pot_size}\t', end='') 
+                State(exclusive_states[id], public_state).print(deck)
 
             id = (id + 1) % total_players
             if id == stop_id:
                 break  # Preflp talk completed with no one raise in previous round.
+        
+        return privious
 
-        # TODO: Flop
-        # TODO: Turn
-        # TODO: River
+
+    def playOneHand(self) -> None:
+        # Prepare the deck and shuffle it.
+        deck = PokerDeck()
+
+        # Deal the card to players. Initlize the start state for each agent.
+        # NOTE: The order of dealing the card is not as real game. It shouldn't matter because the deck is shuffled.
+        public_state = PublicState(len(self.agents))   # Only need one because it's shared information.
+        exclusive_states = []                       # This will be different for each player.
+        for id, agent in enumerate(self.agents):
+            # NOTE: One simplfy is limited to only AA, KK, QQ
+            card = deck.dealCard()
+            exclusive_states.append(ExclusiveState(id, (card, card)))
+            # exclusive_states.append(ExclusiveState(id, (deck.pop(), deck.pop())))
+            if self.verbose == 2:
+                print(f'Player_{id}:', deck.printCards(exclusive_states[-1].my_hand))
+
+        active_players = queue.Queue()
+        for id, agent in enumerate(self.agents):
+            active_players.put(id)
+
+
+        self.putBlinds(deck, public_state, exclusive_states)
+        privious = self.runPreFlop(deck, public_state, exclusive_states, active_players)
+        # TODO: run Flop
+        # TODO: run Turn
+        # TODO: run River
 
         # Calculate winner
-        winners = self.showdown(states, active_player, deck)
+        winners = self.showdown(exclusive_states, public_state, list(active_players.queue), deck)
         if self.verbose == 2:
             print(f'The winners are player {winners}')
         # One more update for the final reward
-        for id in range(total_players):
-            reward = pot / len(winners) if id in winners else 0
-            if self.verbose == 2:
-                print(privious[id][0], privious[id][1], privious[id][2] + reward)
-            self.agents[id].incorporateFeedback(privious[id][0], privious[id][1], privious[id][2] + reward, None)
-            self.chips[id] += reward
+        for id in range(len(self.agents)):
+            reward = public_state.pot / len(winners) if id in winners else 0
+            if privious[id] != None:  # Some player may not doen a single action for the whole hand so the `previous` will be None.
+                if self.verbose == 2:
+                    print(privious[id][0], privious[id][1], privious[id][2] + reward)
+                self.agents[id].incorporateFeedback(privious[id][0], privious[id][1], privious[id][2] + reward, None)
+            self.updateChips(public_state, exclusive_states, id, -reward)
+            
         
         if self.verbose == 2:
-            print(f"Players' chips: {self.chips}")
+            print(f"Players' chips: {self.chips}\n")
 
         # Shift dealer position for next hand.
-        self.dealer_id = (self.dealer_id + 1) % total_players
+        self.dealer_id = (self.dealer_id + 1) % len(self.agents)
 
 
     def run(self, hands: int):
         history = []  # Store the chip history of agent_0 after each hand.
         for i in range(hands):
-            self.play_one_hand()
+            self.playOneHand()
             history.append(deepcopy(self.chips[0]))
             if i % 1000 == 0:
                 print(f'{i}/{hands} hands.')
@@ -173,20 +182,22 @@ class TexasHoldemSimulator:
 # Return a single-element list containing a binary (indicator) feature
 # for the existence of the (state, action) pair.  Provides no generalization.
 def identityFeatureExtractor(state: State, action: Action) -> List[Tuple[Tuple[Any, Action], float]]:
-    featureKey = (state.getTuple(), action)
+    # NOTE: Do not directly put the State object into the tuple since it will use the object ID as hash key.
+    # TODO: Not all attribute is extracted from state. Build a better feature extractor.
+    featureKey = (state.exclusive.my_id, state.exclusive.my_hand, state.public.preflop_actions, action)
     featureValue = 1
     return [(featureKey, featureValue)]
 
 
 def main():
     learning_agent = QLearningAgent(getActions, 1.0, identityFeatureExtractor)
-    simulator = TexasHoldemSimulator([learning_agent, AKQAgent()], 0)
+    simulator = TexasHoldemSimulator([learning_agent, StochasticAgent()], verbose=0)
     simulator.run(100000)
     
     # Print the learned Q value regarding to state-action.
     if True:
-        for (state, action), value in learning_agent.weights.items():
-            print(f'{state} {action} {value}')
+        for feature, value in learning_agent.weights.items():
+            print(f'{feature} {value}')
     print(f'Number of features: {len(learning_agent.weights)}')
 
 

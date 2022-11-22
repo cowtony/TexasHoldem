@@ -45,7 +45,7 @@ QLearing
 Run 10k hands, discount = 1.
 
 - Against FoldAgent: 140 BB/100
-- Against StochasticAgent: 60-100 BB/100
+- Against StochasticAgent: 40-100 BB/100
 - Against CallAgent: 41-44 BB/100
 - Against AKQAgent: 5.76, 9.66, -6.06, -5.83, 12.18 (120 states)
 

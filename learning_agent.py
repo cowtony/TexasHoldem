@@ -96,11 +96,11 @@ class SingleActionAgent(LearningAgent):
 # This agent is only used for the A, K, Q game.
 class AKQAgent(LearningAgent):
     def getAction(self, state: State) -> Action:
-        if state.my_hand == (2, 2):  # AA
+        if state.exclusive.my_hand == (2, 2):  # AA
             return Action.RAISE
-        elif state.my_hand == (1, 1):  # KK
+        elif state.exclusive.my_hand == (1, 1):  # KK
             return random.choice([action for action in Action])
-        elif state.my_hand == (0, 0):  # QQ
+        elif state.exclusive.my_hand == (0, 0):  # QQ
             return Action.FOLD
         else:
             raise("This agent is only used for AKQ simplified game!")  # type: ignore
@@ -109,7 +109,7 @@ class AKQAgent(LearningAgent):
 class HumanAgent(LearningAgent):
     def getAction(self, state: State) -> Action:
         while True:
-            action = input(f"Player_{state.my_id}, What's your action (1:FOLD 2:CALL/CHECK 3:RAISE)? ")
+            action = input(f"Player_{state.exclusive.my_id}, What's your action (1:FOLD 2:CALL/CHECK 3:RAISE)? ")
             if action == '1':
                 return Action.FOLD
             elif action == '2':
