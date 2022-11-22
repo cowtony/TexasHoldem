@@ -24,43 +24,6 @@ class LearningAgent:
     def incorporateFeedback(self, state: State, action: Action, reward: float, newState: State): pass
 
 
-class StochasticAgent(LearningAgent):
-    def getAction(self, state: State) -> Action:
-      return random.choice([action for action in Action])
-
-
-class CallOnlyAgent(LearningAgent):
-    def getAction(self, state: State) -> Action:
-        return Action.CALL
-
-
-# This agent is only used for the A, K, Q game.
-class AKQAgent(LearningAgent):
-    def getAction(self, state: State) -> Action:
-        if state.my_hand == (2, 2):  # AA
-            return Action.RAISE
-        elif state.my_hand == (1, 1):  # KK
-            return random.choice([action for action in Action])
-        elif state.my_hand == (0, 0):  # QQ
-            return Action.FOLD
-        else:
-            raise("This agent is only used for AKQ simplified game!")  # type: ignore
-
-
-class HumanAgent(LearningAgent):
-    def getAction(self, state: State) -> Action:
-        while True:
-            action = input(f"Player_{state.my_id}, What's your action (1:FOLD 2:CALL/CHECK 3:RAISE)? ")
-            if action == '1':
-                return Action.FOLD
-            elif action == '2':
-                return Action.CALL
-            elif action == '3':
-                return Action.RAISE
-            else:
-                print('Invalid input!')
-
-
 # Performs Q-learning.  Read util.RLAlgorithm for more information.
 # actions: a function that takes a state and returns a list of actions.
 # discount: a number between 0 and 1, which determines the discount factor
@@ -115,3 +78,43 @@ class QLearningAgent(LearningAgent):
         for feature, value in self.featureExtractor(state, action):
             self.weights[feature] -= coefficient * value
 
+
+
+class StochasticAgent(LearningAgent):
+    def getAction(self, state: State) -> Action:
+      return random.choice([action for action in Action])
+
+
+class SingleActionAgent(LearningAgent):
+    def __init__(self, action = Action.CALL):
+        self.action = action
+
+    def getAction(self, state: State) -> Action:
+        return self.action
+        
+
+# This agent is only used for the A, K, Q game.
+class AKQAgent(LearningAgent):
+    def getAction(self, state: State) -> Action:
+        if state.my_hand == (2, 2):  # AA
+            return Action.RAISE
+        elif state.my_hand == (1, 1):  # KK
+            return random.choice([action for action in Action])
+        elif state.my_hand == (0, 0):  # QQ
+            return Action.FOLD
+        else:
+            raise("This agent is only used for AKQ simplified game!")  # type: ignore
+
+
+class HumanAgent(LearningAgent):
+    def getAction(self, state: State) -> Action:
+        while True:
+            action = input(f"Player_{state.my_id}, What's your action (1:FOLD 2:CALL/CHECK 3:RAISE)? ")
+            if action == '1':
+                return Action.FOLD
+            elif action == '2':
+                return Action.CALL
+            elif action == '3':
+                return Action.RAISE
+            else:
+                print('Invalid input!')

@@ -6,7 +6,7 @@ Run `simulator.py` to play.
 
 ## Simulator
 
-- Support multiplayer (>= 2)
+- Support multiplayer (>= 2).
 - Customize deck: Full deck or reduced deck.
   - One good example of reduced deck would be Q,K,A only and one card for each player.
     
@@ -20,6 +20,10 @@ Run `simulator.py` to play.
 
 ### States
 
+- my_hand
+- my_id
+- preflop_actions
+
 ### Actions
 
 - FOLD
@@ -28,12 +32,26 @@ Run `simulator.py` to play.
 
 ## Algorithm
 
+QLearing
 
 ## Simplfied assumptions:
 
 - Player has infinite chips.
 
+## Result
+
+### AKQ single card Game
+
+Run 10k hands, discount = 1.
+
+- Against FoldAgent: 140 BB/100
+- Against StochasticAgent: 60-100 BB/100
+- Against CallAgent: 41-44 BB/100
+- Against AKQAgent: 5.76, 9.66, -6.06, -5.83, 12.18 (120 states)
+
+
 
 ## TODO:
 
-- Implement metric to count winning rate or total chips won.
+- Implement metric to count winning rate or total chips won. (done 11/21)
+- Save and load the trainging result, so that human can play with a trained agent.
