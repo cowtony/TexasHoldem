@@ -51,14 +51,15 @@ class State:
         return self.public.current_bet - self.public.players_bet[self.exclusive.my_id]
 
     
+    # NOTE: This only return the raise cost. If a player currently bet less than the `current_bet`, the player need to call first then raise.
     def getRaiseCost(self) -> int:
         call_amount = self.getCallCost()
-        return call_amount + round((self.public.pot + call_amount) * 0.5)
+        return round((self.public.pot + call_amount) * 0.5)
         
 
-    # Return the cost for action CALL or RAISE as well as the current pot size.
-    # The cost will be the chip amount needed for next action.
+    # Simulate the action history to compute the next cost for CALL or RAISE
     # Returned tuple: (cost of CALL, cost of RAISE, current pot size)
+    # NOTE: This function is not currently used. But keep their for good sanity check.
     def getCostBySimulation(self) -> Tuple[int, int, int]:
         player_bet = [0] * self.public.players
         current_bet = 0
@@ -75,7 +76,9 @@ class State:
                     current_bet = 2  # Big Blind
                     pot += 2
                 else:
-                    current_bet += pot // 2
+                    pot += current_bet - player_bet[id]
+                    player_bet[id] = current_bet
+                    current_bet += round((pot) * 0.5)
                     pot += current_bet - player_bet[id]
                     player_bet[id] = current_bet
             elif action == Action.CALL:
@@ -83,7 +86,7 @@ class State:
                 player_bet[id] = current_bet
         
         call_amount = current_bet - player_bet[self.exclusive.my_id]
-        return call_amount, call_amount + pot // 2, pot
+        return call_amount, round((pot + call_amount) * 0.5), pot
 
 
 

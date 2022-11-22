@@ -48,6 +48,7 @@ class TexasHoldemSimulator:
     # NOTE: The positive amount is flow into the pot.
     def updateChips(self, public_state, exclusive_states, player_id, amount):
         public_state.pot += amount
+        public_state.players_bet[player_id] += amount
         exclusive_states[player_id].chips -= amount
         self.chips[player_id] -= amount
 
@@ -69,6 +70,8 @@ class TexasHoldemSimulator:
             print(f'Pot: {3}\t', end='')
             State(exclusive_states[big_blind_id], public_state).print(deck)
 
+        public_state.current_bet = 2
+
 
     # TODO: remove `deck` argument from here.
     def runPreFlop(self, deck: PokerDeck, public_state: PublicState, exclusive_states: List[ExclusiveState], active_players: queue.Queue):
@@ -79,24 +82,25 @@ class TexasHoldemSimulator:
 
         while active_players.qsize() > 1:
             id = active_players.get()
+            state = deepcopy(State(exclusive_states[id], public_state))
 
             if privious[id] != None:  # Avoid the first call by checking Action
-                self.agents[id].incorporateFeedback(privious[id][0], privious[id][1], privious[id][2], State(exclusive_states[id], public_state))
+                self.agents[id].incorporateFeedback(privious[id][0], privious[id][1], privious[id][2], state)
                 
-            action = self.agents[id].getAction(State(exclusive_states[id], public_state))
-            call_cost, raise_cost, pot_size = State(exclusive_states[id], public_state).getCostBySimulation()
-            if pot_size != public_state.pot:
-                raise ("Some logical inside function State.getCostBySimulation()")  # type: ignore
+            action = self.agents[id].getAction(state)
+            call_cost = state.getCallCost()
+            raise_cost = state.getRaiseCost()
 
             if action == Action.FOLD:
-                privious[id] = (deepcopy(State(exclusive_states[id], public_state)), action, 0)
+                privious[id] = (state, action, 0)
             elif action == Action.RAISE:
                 stop_id = id  # The raise will refresh stop_id of the last player who eligible to talk.
-                privious[id] = (deepcopy(State(exclusive_states[id], public_state)), action, -raise_cost)
-                self.updateChips(public_state, exclusive_states, id, raise_cost)
+                privious[id] = (state, action, -call_cost - raise_cost)
+                self.updateChips(public_state, exclusive_states, id, call_cost + raise_cost)  # NOTE: Here player must CALL to match the previous player then RAISE.
                 active_players.put(id)
+                public_state.current_bet += raise_cost
             else:  # Action.CALL
-                privious[id] = (deepcopy(State(exclusive_states[id], public_state)), action, -call_cost)
+                privious[id] = (state, action, -call_cost)
                 self.updateChips(public_state, exclusive_states, id, call_cost)
                 active_players.put(id)
 
@@ -105,7 +109,7 @@ class TexasHoldemSimulator:
 
             # Print Info
             if self.verbose == 2:
-                print(f'Pot: {pot_size}\t', end='') 
+                print(f'Pot: {public_state.pot}\t', end='') 
                 State(exclusive_states[id], public_state).print(deck)
 
             id = (id + 1) % total_players
@@ -132,14 +136,17 @@ class TexasHoldemSimulator:
                 print(f'Player_{id}:', deck.printCards(exclusive_states[-1].my_hand))
 
         active_players = queue.Queue()
-        for id, agent in enumerate(self.agents):
-            active_players.put(id)
+        for id in range(len(self.agents)):
+            active_players.put((self.dealer_id + 3 + id) % len(self.agents))
 
 
         self.putBlinds(deck, public_state, exclusive_states)
         privious = self.runPreFlop(deck, public_state, exclusive_states, active_players)
+        # TODO: rotate the active_players queue to let small_blind act first.
         # TODO: run Flop
+        # TODO: rotate the active_players queue to let small_blind act first.
         # TODO: run Turn
+        # TODO: rotate the active_players queue to let small_blind act first.
         # TODO: run River
 
         # Calculate winner
@@ -191,7 +198,7 @@ def identityFeatureExtractor(state: State, action: Action) -> List[Tuple[Tuple[A
 
 def main():
     learning_agent = QLearningAgent(getActions, 1.0, identityFeatureExtractor)
-    simulator = TexasHoldemSimulator([learning_agent, StochasticAgent()], verbose=0)
+    simulator = TexasHoldemSimulator([learning_agent, AKQAgent()], verbose=0)
     simulator.run(100000)
     
     # Print the learned Q value regarding to state-action.
@@ -199,6 +206,8 @@ def main():
         for feature, value in learning_agent.weights.items():
             print(f'{feature} {value}')
     print(f'Number of features: {len(learning_agent.weights)}')
+
+    #TODO: Ask user to save the Learning result or not.
 
 
 if __name__ == "__main__":
