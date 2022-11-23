@@ -2,6 +2,7 @@ from copy import copy, deepcopy
 from typing import List, Tuple, Any
 import queue
 import matplotlib.pyplot as plt
+import pickle
 
 from learning_agent import *
 from game_state import *
@@ -120,24 +121,20 @@ class TexasHoldemSimulator:
 
 
     def playOneHand(self) -> None:
-        # Prepare the deck and shuffle it.
-        deck = PokerDeck()
-
         # Deal the card to players. Initlize the start state for each agent.
         # NOTE: The order of dealing the card is not as real game. It shouldn't matter because the deck is shuffled.
+        deck = PokerDeck() # Prepare the deck and shuffle it.
         public_state = PublicState(len(self.agents))   # Only need one because it's shared information.
-        exclusive_states = []                       # This will be different for each player.
-        for id, agent in enumerate(self.agents):
+        exclusive_states = []                          # This will be different for each player.
+        active_players = queue.Queue()
+        for id in range(len(self.agents)):
             # NOTE: One simplfy is limited to only AA, KK, QQ
             card = deck.dealCard()
             exclusive_states.append(ExclusiveState(id, (card, card)))
-            # exclusive_states.append(ExclusiveState(id, (deck.pop(), deck.pop())))
+            # exclusive_states.append(ExclusiveState(id, (deck.dealCard(), deck.dealCard())))
+            active_players.put((self.dealer_id + 3 + id) % len(self.agents))
             if self.verbose == 2:
                 print(f'Player_{id}:', deck.printCards(exclusive_states[-1].my_hand))
-
-        active_players = queue.Queue()
-        for id in range(len(self.agents)):
-            active_players.put((self.dealer_id + 3 + id) % len(self.agents))
 
 
         self.putBlinds(deck, public_state, exclusive_states)
@@ -157,8 +154,6 @@ class TexasHoldemSimulator:
         for id in range(len(self.agents)):
             reward = public_state.pot / len(winners) if id in winners else 0
             if privious[id] != None:  # Some player may not doen a single action for the whole hand so the `previous` will be None.
-                if self.verbose == 2:
-                    print(privious[id][0], privious[id][1], privious[id][2] + reward)
                 self.agents[id].incorporateFeedback(privious[id][0], privious[id][1], privious[id][2] + reward, None)
             self.updateChips(public_state, exclusive_states, id, -reward)
             
@@ -197,8 +192,9 @@ def identityFeatureExtractor(state: State, action: Action) -> List[Tuple[Tuple[A
 
 
 def main():
-    learning_agent = QLearningAgent(getActions, 1.0, identityFeatureExtractor)
-    simulator = TexasHoldemSimulator([learning_agent, AKQAgent()], verbose=0)
+    learning_agent = QLearningAgent(getActions, 1.0, identityFeatureExtractor, weights_file='against.pkl')
+    learning_agent_2 = QLearningAgent(getActions, 1.0, identityFeatureExtractor, weights_file='')
+    simulator = TexasHoldemSimulator([learning_agent, learning_agent_2], verbose=0)
     simulator.run(100000)
     
     # Print the learned Q value regarding to state-action.
@@ -207,7 +203,10 @@ def main():
             print(f'{feature} {value}')
     print(f'Number of features: {len(learning_agent.weights)}')
 
-    #TODO: Ask user to save the Learning result or not.
+    # Save the learning progress.
+    json_name = input('Type the file name to store the weights: ')
+    with open(f'{json_name}.pkl', 'wb') as file:
+        pickle.dump([learning_agent.weights, learning_agent.numIters], file)
 
 
 if __name__ == "__main__":

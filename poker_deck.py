@@ -9,10 +9,15 @@ class PokerDeck:
         self.kSuits = ['♤', '♡', '♧', '♢']
         self.kRanks = ['2', '3', '4', '5', '6', '7', '8', '9', 'T', 'J', 'Q', 'K', 'A']
 
-        # Leduc Deck (COmment out to use the standard deck)
+        # Leduc Deck - AKQ game (Comment out to use the standard deck)
         self.kSuitColor = ['\u001b[37;1m']
         self.kSuits = ['♤']
         self.kRanks = ['Q', 'K', 'A']
+
+        # Leduc Deck - AKQ game (Comment out to use the standard deck)
+        # self.kSuitColor = ['\u001b[37;1m', '\u001b[31m']
+        # self.kSuits = ['♤', '♡']
+        # self.kRanks = ['T', 'J', 'Q', 'K', 'A']
 
         self.deck = list(range(len(self.kSuits) * len(self.kRanks)))
         random.shuffle(self.deck)

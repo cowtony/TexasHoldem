@@ -2,6 +2,7 @@ import random
 import math
 from collections import defaultdict
 from typing import List, Tuple, Dict, Any, Callable
+import pickle
 
 from game_state import State, Action
 
@@ -31,13 +32,16 @@ class LearningAgent:
 # explorationProb: the epsilon value indicating how frequently the policy
 # returns a random action
 class QLearningAgent(LearningAgent):
-    def __init__(self, actions: Callable, discount: float, featureExtractor: Callable, explorationProb=0.2):
+    def __init__(self, actions: Callable, discount: float, featureExtractor: Callable, explorationProb=0.2, weights_file=''):
         self.actions = actions
         self.discount = discount
         self.featureExtractor = featureExtractor
         self.explorationProb = explorationProb
         self.weights = defaultdict(float)
         self.numIters = 1  # Starting from 1 to avoid divided by zero in `getStepSize()`
+        if len(weights_file) > 0:
+            with open(weights_file, 'rb') as file:
+                self.weights, self.numIters = pickle.load(file)
 
 
     # Return the Q function associated with the weights and features
