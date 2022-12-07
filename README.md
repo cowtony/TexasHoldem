@@ -54,4 +54,4 @@ Run 10k hands, discount = 1.
 ## TODO:
 
 - Implement metric to count winning rate or total chips won. (done 11/21)
-- Save and load the trainging result, so that human can play with a trained agent.
+- Save and load the trainging result, so that human can play with a trained agent. (done)
