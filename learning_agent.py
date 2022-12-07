@@ -100,14 +100,12 @@ class SingleActionAgent(LearningAgent):
 # This agent is only used for the A, K, Q game.
 class AKQAgent(LearningAgent):
     def getAction(self, state: State) -> Action:
-        if state.exclusive.my_hand == (2, 2):  # AA
+        if state.exclusive.my_hand == (2, 2):  # Highest card
             return Action.RAISE
-        elif state.exclusive.my_hand == (1, 1):  # KK
-            return random.choice([action for action in Action])
-        elif state.exclusive.my_hand == (0, 0):  # QQ
+        elif state.exclusive.my_hand == (0, 0):  # Lowest card
             return Action.FOLD
         else:
-            raise("This agent is only used for AKQ simplified game!")  # type: ignore
+            return random.choice([action for action in Action])
 
 
 class HumanAgent(LearningAgent):

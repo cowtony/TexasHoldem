@@ -3,8 +3,9 @@ from typing import List, Tuple, Any
 import queue
 import matplotlib.pyplot as plt
 import pickle
+import random
 
-from learning_agent import *
+from learning_agent import LearningAgent, SingleActionAgent, StochasticAgent, AKQAgent, QLearningAgent, HumanAgent  # type: ignore
 from game_state import *
 from poker_deck import PokerDeck
 
@@ -177,8 +178,8 @@ class TexasHoldemSimulator:
             print(f'Agent {id} has win rate: {self.chips[id] / hands * 100: .2f} bb/100.')
 
         plt.plot(history)
+        plt.title("Cumulative Reward")
         plt.show()
-
 
 
 # Return a single-element list containing a binary (indicator) feature
@@ -188,19 +189,23 @@ def identityFeatureExtractor(state: State, action: Action) -> List[Tuple[Tuple[A
     # TODO: Not all attribute is extracted from state. Build a better feature extractor.
     featureKey = (state.exclusive.my_id, state.exclusive.my_hand, state.public.preflop_actions, action)
     featureValue = 1
-    return [(featureKey, featureValue)]
+    return [(featureKey, featureValue)]  # type: ignore
 
 
 def main():
-    learning_agent = QLearningAgent(getActions, 1.0, identityFeatureExtractor, weights_file='against.pkl')
+    # random.seed(1)
+    learning_agent = QLearningAgent(getActions, 1.0, identityFeatureExtractor, weights_file='')
     learning_agent_2 = QLearningAgent(getActions, 1.0, identityFeatureExtractor, weights_file='')
-    simulator = TexasHoldemSimulator([learning_agent, learning_agent_2], verbose=0)
+
+    simulator = TexasHoldemSimulator([learning_agent, AKQAgent()], verbose=0)
     simulator.run(100000)
     
     # Print the learned Q value regarding to state-action.
     if True:
         for feature, value in learning_agent.weights.items():
             print(f'{feature} {value}')
+            # if feature[1][0] != 2 and value > 0:
+            #     input("This might be a bluff!")
     print(f'Number of features: {len(learning_agent.weights)}')
 
     # Save the learning progress.
